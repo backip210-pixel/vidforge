@@ -60,13 +60,19 @@ class JobStore:
     def list(self) -> list[Job]:
         return sorted(self.jobs.values(), key=lambda j: j.created_at, reverse=True)
 
-    async def delete(self, job_id: str) -> bool:
+    async def delete(self, job_id: str, delete_output: bool = True) -> bool:
         async with self.lock:
             job = self.jobs.get(job_id)
             if not job or job.status == "running":
                 return False
             self.jobs.pop(job_id, None)
             shutil.rmtree(self.data_dir / "jobs" / job_id, ignore_errors=True)
+            # Also remove the rendered MP4 so deleting a job actually frees disk.
+            if delete_output and job.output_file:
+                try:
+                    Path(job.output_file).unlink(missing_ok=True)
+                except OSError:
+                    pass
             await self.save()
             return True
 
@@ -183,6 +189,67 @@ async def cleanup_temp(data_dir: Path, max_age_hours: int, store: JobStore) -> i
         except FileNotFoundError:
             continue
     return removed
+
+
+VIDEO_OUTPUT_EXTS = {".mp4", ".mov", ".mkv", ".webm", ".m4v"}
+
+
+async def clear_outputs(data_dir: Path, store: JobStore, mode: str = "orphans") -> dict:
+    """Delete rendered videos from the outputs folder.
+
+    ``mode``:
+      * ``"orphans"`` - remove only output files no longer referenced by any job
+        (e.g. left behind after a job was deleted). Safe default.
+      * ``"all"``     - remove every rendered video, and detach output links from
+        jobs so the dashboard no longer offers downloads for missing files.
+
+    Outputs belonging to jobs that are still ``queued`` or ``running`` are always
+    preserved. Returns ``{"removed": N, "freed_bytes": B}``.
+    """
+    outputs_dir = data_dir / "outputs"
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+
+    async with store.lock:
+        # Resolve the output path of every job we must not touch.
+        protected_statuses = {"queued", "running"}
+        referenced: dict[Path, Job] = {}
+        protected: set[Path] = set()
+        for job in store.jobs.values():
+            if not job.output_file:
+                continue
+            try:
+                p = Path(job.output_file).resolve()
+            except OSError:
+                continue
+            referenced[p] = job
+            if job.status in protected_statuses:
+                protected.add(p)
+
+        removed = 0
+        freed = 0
+        for path in outputs_dir.iterdir():
+            if not path.is_file() or path.suffix.lower() not in VIDEO_OUTPUT_EXTS:
+                continue
+            rp = path.resolve()
+            if rp in protected:
+                continue
+            if mode == "orphans" and rp in referenced:
+                continue  # still attached to a kept job
+            try:
+                size = path.stat().st_size
+                path.unlink(missing_ok=True)
+                removed += 1
+                freed += size
+                # If we removed a file a job still points to, detach the link.
+                job = referenced.get(rp)
+                if job is not None:
+                    job.output_file = None
+            except OSError:
+                continue
+
+        if removed:
+            await store.save()
+        return {"removed": removed, "freed_bytes": freed}
 
 
 async def periodic_cleanup(data_dir: Path, max_age_hours: int, store: JobStore) -> None:

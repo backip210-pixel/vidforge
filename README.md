@@ -10,7 +10,7 @@ Build polished three-section video compilations from your own images, videos, mu
 
 [Deployment guide](DEPLOYMENT.md) · [Quick start](#quick-start) · [Features](#features) · [Configuration](#configuration)
 
-<img src="docs/screenshots/dashboard.svg" alt="VidForge dashboard" width="100%" />
+<img src="docs/screenshots/dashboard.png" alt="VidForge dashboard" width="100%" />
 
 </div>
 
@@ -36,6 +36,7 @@ It runs one render at a time through a lightweight built-in queue, so heavy FFmp
 - ▶️ **In-browser preview** — play a finished render right in the dashboard (HTTP range streaming) before downloading.
 - 💾 **Reusable presets** — save the current render settings as a named preset and reload them with one click.
 - 🧹 **Self-cleaning** — isolated per-job temp folders that are purged after each render, plus a periodic 12-hour cleanup of stale temp files.
+- 🗑️ **Output management** — deleting a job also removes its rendered MP4, and a **Clear outputs** button (showing current size) purges orphaned videos, or all of them, straight from the dashboard so storage doesn't fill up.
 - 🔒 **Optional basic auth** — protect the dashboard with a username and password for shared networks.
 
 ## Quick start
@@ -221,11 +222,11 @@ pytest -q
 
 **Desktop**
 
-<img src="docs/screenshots/dashboard.svg" alt="Desktop dashboard" width="100%" />
+<img src="docs/screenshots/dashboard.png" alt="Desktop dashboard" width="100%" />
 
 **Mobile**
 
-<img src="docs/screenshots/mobile.svg" alt="Mobile dashboard" width="320" />
+<img src="docs/screenshots/mobile.png" alt="Mobile dashboard" width="320" />
 
 </div>
 

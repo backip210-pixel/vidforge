@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .models import RenderOptions
 from .presets import PresetStore
-from .queue_manager import JobQueue, JobStore, cleanup_temp, periodic_cleanup
+from .queue_manager import JobQueue, JobStore, cleanup_temp, clear_outputs, periodic_cleanup
 from .renderer import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 from .settings import get_settings
 
@@ -313,6 +313,24 @@ async def delete_preset(preset_id: str) -> dict:
 async def cleanup_now() -> dict:
     removed = await cleanup_temp(settings.app_data_dir, settings.temp_max_age_hours, store)
     return {"removed": removed}
+
+
+@app.get("/api/outputs", dependencies=[Depends(require_auth)])
+async def outputs_info() -> dict:
+    """Report how many rendered videos exist and how much space they use."""
+    outputs_dir = settings.outputs_dir
+    outputs_dir.mkdir(parents=True, exist_ok=True)
+    files = [p for p in outputs_dir.iterdir() if p.is_file() and p.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm", ".m4v")]
+    total = sum(p.stat().st_size for p in files)
+    return {"count": len(files), "bytes": total}
+
+
+@app.post("/api/outputs/clear", dependencies=[Depends(require_auth)])
+async def outputs_clear(mode: str = "orphans") -> dict:
+    """Delete rendered videos. mode=orphans (default) or mode=all."""
+    if mode not in ("orphans", "all"):
+        raise HTTPException(400, "mode must be 'orphans' or 'all'")
+    return await clear_outputs(settings.app_data_dir, store, mode=mode)
 
 
 @app.get("/health")
