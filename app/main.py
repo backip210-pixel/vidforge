@@ -7,22 +7,27 @@ from pathlib import Path
 
 import uvicorn
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
 from .models import RenderOptions
+from .presets import PresetStore
 from .queue_manager import JobQueue, JobStore, cleanup_temp, periodic_cleanup
 from .renderer import AUDIO_EXTS, IMAGE_EXTS, VIDEO_EXTS
 from .settings import get_settings
 
 settings = get_settings()
-app = FastAPI(title="VidForge", version="1.0.0")
+app = FastAPI(title="VidForge", version="1.1.0")
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 security = HTTPBasic(auto_error=False)
 store = JobStore(settings.app_data_dir, settings.state_file)
 queue = JobQueue(store)
+presets = PresetStore(settings.presets_file)
 cleanup_task: asyncio.Task | None = None
+
+# Accept any supported media in either column.
+MEDIA_EXTS = IMAGE_EXTS | VIDEO_EXTS
 
 
 def require_auth(credentials: HTTPBasicCredentials | None = Depends(security)) -> None:
@@ -39,6 +44,7 @@ def require_auth(credentials: HTTPBasicCredentials | None = Depends(security)) -
 @app.on_event("startup")
 async def startup() -> None:
     await store.load()
+    await presets.load()
     queue.start()
     global cleanup_task
     cleanup_task = asyncio.create_task(periodic_cleanup(settings.app_data_dir, settings.temp_max_age_hours, store))
@@ -87,6 +93,9 @@ async def create_job(
     keep_video_audio: bool = Form(False),
     captions_file: UploadFile | None = File(None),
     music: UploadFile | None = File(None),
+    center: list[UploadFile] = File(default=[]),
+    sides: list[UploadFile] = File(default=[]),
+    # Legacy fields kept for backwards compatibility: images -> sides, videos -> center.
     images: list[UploadFile] = File(default=[]),
     videos: list[UploadFile] = File(default=[]),
 ) -> dict:
@@ -137,17 +146,28 @@ async def create_job(
                 fh.write(chunk)
         return True
 
-    image_count = 0
-    video_count = 0
-    for item in images:
-        image_count += 1 if await save_upload(item, job_dir / "images", IMAGE_EXTS) else 0
+    center_count = 0
+    sides_count = 0
+    # New model: center column + shared sides pool, each accepting images & videos.
+    for item in center:
+        center_count += 1 if await save_upload(item, job_dir / "center", MEDIA_EXTS) else 0
+    for item in sides:
+        sides_count += 1 if await save_upload(item, job_dir / "sides", MEDIA_EXTS) else 0
+    # Legacy uploads: videos go to the center, images go to the sides pool.
     for item in videos:
-        video_count += 1 if await save_upload(item, job_dir / "videos", VIDEO_EXTS) else 0
+        center_count += 1 if await save_upload(item, job_dir / "center", VIDEO_EXTS) else 0
+    for item in images:
+        sides_count += 1 if await save_upload(item, job_dir / "sides", IMAGE_EXTS) else 0
+
     music_count = 0
     if music and music.filename:
         music_count = 1 if await save_upload(music, job_dir / "music", AUDIO_EXTS) else 0
 
-    job.input_counts = {"images": image_count, "videos": video_count, "music": music_count}
+    job.input_counts = {"center": center_count, "sides": sides_count, "music": music_count}
+    if center_count == 0 and sides_count == 0:
+        # Nothing usable was uploaded; remove the empty job so the queue stays clean.
+        await store.delete(job.id)
+        raise HTTPException(400, "Upload at least one center or side image/video.")
     await store.update(job)
     return job.to_dict()
 
@@ -156,6 +176,18 @@ async def create_job(
 async def requeue_job(job_id: str) -> dict:
     if not await store.requeue(job_id):
         raise HTTPException(400, "Cannot requeue this job")
+    return {"ok": True}
+
+
+@app.post("/api/jobs/{job_id}/cancel", dependencies=[Depends(require_auth)])
+async def cancel_job(job_id: str) -> dict:
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    if job.status != "running":
+        raise HTTPException(400, "Only a running job can be cancelled")
+    if not queue.cancel(job_id):
+        raise HTTPException(400, "This job is not currently running")
     return {"ok": True}
 
 
@@ -186,6 +218,91 @@ async def download(job_id: str):
     if not path.exists():
         raise HTTPException(404, "Output missing from disk")
     return FileResponse(path, media_type="video/mp4", filename=path.name)
+
+
+def _resolve_output(job_id: str) -> Path:
+    job = store.get(job_id)
+    if not job or not job.output_file:
+        raise HTTPException(404, "Output not found")
+    path = Path(job.output_file)
+    if not path.exists():
+        raise HTTPException(404, "Output missing from disk")
+    return path
+
+
+@app.get("/api/jobs/{job_id}/stream", dependencies=[Depends(require_auth)])
+async def stream(job_id: str, request: Request):
+    """Stream a finished render with HTTP Range support for in-browser preview."""
+    path = _resolve_output(job_id)
+    file_size = path.stat().st_size
+    range_header = request.headers.get("range")
+    chunk = 1024 * 1024
+
+    if range_header is None:
+        def full():
+            with path.open("rb") as fh:
+                while data := fh.read(chunk):
+                    yield data
+
+        return StreamingResponse(
+            full(),
+            media_type="video/mp4",
+            headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)},
+        )
+
+    # Parse "bytes=start-end".
+    try:
+        units, rng = range_header.split("=", 1)
+        start_s, end_s = rng.split("-", 1)
+        start = int(start_s) if start_s else 0
+        end = int(end_s) if end_s else file_size - 1
+    except (ValueError, AttributeError):
+        raise HTTPException(416, "Invalid range header")
+    start = max(0, start)
+    end = min(end, file_size - 1)
+    if start > end:
+        return Response(status_code=416, headers={"Content-Range": f"bytes */{file_size}"})
+    length = end - start + 1
+
+    def ranged():
+        remaining = length
+        with path.open("rb") as fh:
+            fh.seek(start)
+            while remaining > 0:
+                data = fh.read(min(chunk, remaining))
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(length),
+    }
+    return StreamingResponse(ranged(), status_code=206, media_type="video/mp4", headers=headers)
+
+
+@app.get("/api/presets", dependencies=[Depends(require_auth)])
+async def list_presets() -> dict:
+    return {"presets": presets.list()}
+
+
+@app.post("/api/presets", dependencies=[Depends(require_auth)])
+async def create_preset(payload: dict) -> dict:
+    name = payload.get("name") or "Untitled preset"
+    values = payload.get("values") or {}
+    if not isinstance(values, dict):
+        raise HTTPException(400, "values must be an object")
+    preset = await presets.add(name, values)
+    return preset
+
+
+@app.delete("/api/presets/{preset_id}", dependencies=[Depends(require_auth)])
+async def delete_preset(preset_id: str) -> dict:
+    if not await presets.delete(preset_id):
+        raise HTTPException(404, "Preset not found")
+    return {"ok": True}
 
 
 @app.post("/api/cleanup", dependencies=[Depends(require_auth)])

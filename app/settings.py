@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     def state_file(self) -> Path:
         return self.app_data_dir / "jobs.json"
 
+    @property
+    def presets_file(self) -> Path:
+        return self.app_data_dir / "presets.json"
+
 
 @lru_cache
 def get_settings() -> Settings:

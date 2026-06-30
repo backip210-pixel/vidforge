@@ -7,8 +7,13 @@ from app.renderer import caption_sequence, drawtext_filter, resolution_values, c
 
 
 def test_resolution_values():
-    assert resolution_values("1440p") == (2560, 1440, 853, 853)
-    assert resolution_values("ultrawide") == (3440, 1440, 1146, 1146)
+    # Side column widths must be even for libx264; the middle column absorbs any
+    # remainder so the three columns still sum to the exact total width.
+    total_w, total_h, left_w, right_w = resolution_values("1440p")
+    assert (total_w, total_h) == (2560, 1440)
+    assert left_w % 2 == 0 and right_w % 2 == 0
+    assert (total_w - left_w - right_w) % 2 == 0
+    assert resolution_values("ultrawide")[:2] == (3440, 1440)
 
 
 def test_drawtext_escapes_caption_text():
@@ -46,3 +51,36 @@ def test_caption_sequence_random_preserves_caption_pool():
     assert len(seq) == 12
     assert set(seq).issubset({"A", "B", "C"})
     assert {"A", "B", "C"}.issubset(set(seq))
+
+
+def test_collect_inputs_new_and_legacy(tmp_path):
+    from app.renderer import collect_inputs
+    job = tmp_path / "jobs" / "j1"
+    (job / "input" / "center").mkdir(parents=True)
+    (job / "input" / "sides").mkdir(parents=True)
+    (job / "input" / "images").mkdir(parents=True)   # legacy -> sides
+    (job / "input" / "videos").mkdir(parents=True)   # legacy -> center
+    (job / "input" / "center" / "c.mp4").write_bytes(b"x")
+    (job / "input" / "sides" / "s.jpg").write_bytes(b"x")
+    (job / "input" / "images" / "old.png").write_bytes(b"x")
+    (job / "input" / "videos" / "old.mov").write_bytes(b"x")
+    center, sides, music = collect_inputs(job)
+    center_names = {p.name for p in center}
+    sides_names = {p.name for p in sides}
+    assert center_names == {"c.mp4", "old.mov"}
+    assert sides_names == {"s.jpg", "old.png"}
+    assert music is None
+
+
+def test_cancel_token_check_raises():
+    from app.renderer import CancelToken, CancelledError
+    tok = CancelToken()
+    tok.check()  # no-op when not cancelled
+    tok.cancel()
+    assert tok.cancelled
+    try:
+        tok.check()
+    except CancelledError:
+        pass
+    else:
+        raise AssertionError("expected CancelledError")

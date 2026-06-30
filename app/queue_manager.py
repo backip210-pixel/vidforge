@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from .models import Job, RenderOptions, utc_now
-from .renderer import render_job
+from .renderer import CancelledError, CancelToken, render_job
 
 
 class JobStore:
@@ -41,7 +41,7 @@ class JobStore:
         async with self.lock:
             job = Job(name=name or "Untitled render", options=options)
             job_dir = self.data_dir / "jobs" / job.id
-            for sub in ("input/images", "input/videos", "input/music"):
+            for sub in ("input/center", "input/sides", "input/music"):
                 (job_dir / sub).mkdir(parents=True, exist_ok=True)
             job.log_file = str(job_dir / "render.log")
             self.jobs[job.id] = job
@@ -92,6 +92,15 @@ class JobQueue:
         self.store = store
         self._task: asyncio.Task | None = None
         self._stop = asyncio.Event()
+        self._current_id: str | None = None
+        self._cancel: CancelToken | None = None
+
+    def cancel(self, job_id: str) -> bool:
+        """Request cancellation of the job if it is the one currently running."""
+        if self._current_id == job_id and self._cancel is not None:
+            self._cancel.cancel()
+            return True
+        return False
 
     def start(self) -> None:
         if not self._task:
@@ -120,6 +129,10 @@ class JobQueue:
         job.stage = "Starting"
         await self.store.update(job)
 
+        cancel = CancelToken()
+        self._current_id = job.id
+        self._cancel = cancel
+
         def progress(percent: int, stage: str) -> None:
             job.progress = max(0, min(100, percent))
             job.stage = stage
@@ -128,16 +141,23 @@ class JobQueue:
 
         self._loop = asyncio.get_running_loop()
         try:
-            output = await asyncio.to_thread(render_job, job, self.store.data_dir, progress)
+            output = await asyncio.to_thread(render_job, job, self.store.data_dir, progress, cancel)
             job.status = "completed"
             job.output_file = str(output)
             job.progress = 100
             job.stage = "Completed"
+            job.error = None
+        except CancelledError:
+            job.status = "cancelled"
+            job.error = "Render cancelled by user."
+            job.stage = "Cancelled"
         except Exception as exc:
             job.status = "failed"
             job.error = str(exc)
             job.stage = "Failed"
         finally:
+            self._current_id = None
+            self._cancel = None
             shutil.rmtree(self.store.data_dir / "tmp" / job.id, ignore_errors=True)
             job.finished_at = utc_now()
             await self.store.update(job)
