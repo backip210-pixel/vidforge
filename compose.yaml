@@ -1,7 +1,7 @@
 services:
   vidforge:
-    # Default deployment: build the image directly from this GitHub repo/folder.
-    build: .
+    # Default deployment: run the prebuilt container image published by GitHub Actions.
+    # No source checkout or local Docker build is required once the GHCR package exists.
     image: ghcr.io/backip210-pixel/vidforge:latest
     container_name: vidforge
     restart: unless-stopped
@@ -54,6 +54,6 @@ x-casaos:
   title:
     en_us: VidForge
   description:
-    en_us: Upload images, videos and music, queue FFmpeg compilation jobs, track progress and download completed MP4 renders.
+    en_us: Upload images, videos, music and captions, queue FFmpeg compilation jobs, track progress and download completed MP4 renders.
   port_map: "8080"
   scheme: http

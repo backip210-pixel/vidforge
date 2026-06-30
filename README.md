@@ -17,12 +17,26 @@
 
 VidForge is a containerised web dashboard for creating the three-section FFmpeg compilations from your original macOS Bash script. It defaults to safe CPU rendering so it works on AMD, Intel, ARM and VPS hosts without Apple-only `h264_videotoolbox` dependencies.
 
-## Default deployment: Docker Compose
+## Default deployment: pull the container from GitHub
 
-```bash
-git clone https://github.com/backip210-pixel/vidforge.git
-cd vidforge
-docker compose up -d --build
+The intended deployment is now:
+
+```text
+GitHub repo -> GitHub Actions -> GHCR container image -> ZimaOS pulls image
+```
+
+Once this repo has been pushed and the GitHub Actions workflow has completed, deploy this image on ZimaOS:
+
+```text
+ghcr.io/backip210-pixel/vidforge:latest
+```
+
+Recommended container settings:
+
+```text
+Port: 8080 container -> 8080 host
+Volume: ./data -> /data
+Environment: APP_DATA_DIR=/data, APP_PORT=8080, TEMP_MAX_AGE_HOURS=12
 ```
 
 Open:
@@ -31,13 +45,23 @@ Open:
 http://YOUR-ZIMAOS-IP:8080
 ```
 
-The app creates and uses this persistent folder automatically:
+The server does **not** need a source checkout or local Docker build for normal deployment.
 
-```text
-./data
+For detailed ZimaOS, Compose and Docker Run options, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
+
+## Quick Docker Compose deployment
+
+The default compose file pulls the GitHub Container Registry image:
+
+```bash
+docker compose up -d
 ```
 
-For more deployment options, including GHCR image deployment and ZimaOS/CasaOS custom-app notes, see [`DEPLOYMENT.md`](DEPLOYMENT.md).
+If you are developing locally and want to build from source instead:
+
+```bash
+docker compose -f docker-compose.build.yml up -d --build
+```
 
 ## What it does
 
@@ -60,8 +84,11 @@ For more deployment options, including GHCR image deployment and ZimaOS/CasaOS c
 | File | Purpose |
 | --- | --- |
 | `Dockerfile` | Builds the VidForge app image with Python, FFmpeg and fonts. |
-| `docker-compose.yml` | Default ZimaOS/local deployment. Builds from source and tags `ghcr.io/backip210-pixel/vidforge:latest`. |
-| `docker-compose.ghcr.yml` | Optional deployment using the prebuilt GitHub Container Registry image. |
+| `docker-compose.yml` | Default deployment using the prebuilt GHCR image. |
+| `compose.yaml` | Same default deployment for systems that prefer `compose.yaml`. |
+| `ZIMAOS_COMPOSE.yml` | Minimal image-only compose file for ZimaOS custom-app/import workflows. |
+| `docker-compose.ghcr.yml` | Alias of the image-only GHCR deployment compose. |
+| `docker-compose.build.yml` | Developer-only local source build. |
 | `.github/workflows/docker.yml` | Builds and publishes the Docker image to GHCR on pushes to `main`. |
 | `DEPLOYMENT.md` | Detailed Docker, ZimaOS and GHCR deployment instructions. |
 
@@ -84,31 +111,15 @@ data/
   jobs.json          # queue state
 ```
 
-## ZimaOS deployment via GitHub Desktop
+## First-time GitHub package note
 
-Since you plan to use GitHub Desktop:
+The GitHub Actions workflow publishes:
 
-1. Open this `vidforge` folder in GitHub Desktop.
-2. Publish/push it to:
+```text
+ghcr.io/backip210-pixel/vidforge:latest
+```
 
-   ```text
-   https://github.com/backip210-pixel/vidforge
-   ```
-
-3. On ZimaOS, clone/import the repository.
-4. Start it with Docker Compose:
-
-   ```bash
-   docker compose up -d --build
-   ```
-
-5. Visit:
-
-   ```text
-   http://<zimaos-ip>:8080
-   ```
-
-The compose file also contains app metadata and a logo URL for ZimaOS/CasaOS-style custom app workflows.
+After the first successful workflow run, check the repo's **Packages** section. If ZimaOS cannot pull the image, make the GHCR package public or configure Docker/GHCR authentication on the server.
 
 ## Caption options
 
@@ -132,7 +143,7 @@ The original script used macOS `h264_videotoolbox`, which will not work in Linux
 
 Optional advanced encoders are available in the UI:
 
-- **VAAPI**: AMD/Intel Linux hardware encoding. Requires mounting `/dev/dri:/dev/dri` in `docker-compose.yml` and host driver support.
+- **VAAPI**: AMD/Intel Linux hardware encoding. Requires mounting `/dev/dri:/dev/dri` in the container and host driver support.
 - **Intel QSV**: Intel Quick Sync systems.
 - **NVIDIA NVENC**: NVIDIA hosts with the NVIDIA container runtime.
 
@@ -155,18 +166,12 @@ https://raw.githubusercontent.com/backip210-pixel/vidforge/main/app/static/logo.
 
 ## Optional basic authentication
 
-For LAN-only use you can leave auth disabled. To enable browser basic auth, uncomment these environment variables in `docker-compose.yml`:
+For LAN-only use you can leave auth disabled. To enable browser basic auth, set these environment variables:
 
 ```yaml
 environment:
   APP_USERNAME: admin
   APP_PASSWORD: change-me
-```
-
-Restart afterwards:
-
-```bash
-docker compose up -d
 ```
 
 ## Screenshots

@@ -1,12 +1,15 @@
 services:
   vidforge:
-    image: ghcr.io/backip210-pixel/vidforge:latest
+    # Developer/source build. Use this if you want to build locally instead of pulling GHCR.
+    build: .
+    image: vidforge:local
     container_name: vidforge
     restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
       - ./data:/data
+      # - /dev/dri:/dev/dri
     environment:
       APP_DATA_DIR: /data
       APP_PORT: 8080
@@ -17,8 +20,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-    labels:
-      casaos.name: "VidForge"
-      casaos.category: "Media"
-      casaos.webui: "http://[HOST]:[PORT:8080]"
-      casaos.icon: "https://raw.githubusercontent.com/backip210-pixel/vidforge/main/app/static/logo.svg"
