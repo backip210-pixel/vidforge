@@ -23,17 +23,26 @@ def test_drawtext_escapes_caption_text():
     assert "100\\%\\:" in vf
 
 
-def test_neon_caption_style_adds_glow_layers():
+def test_neon_caption_style_uses_two_tone_outline():
+    # The neon style wraps white text in a solid cyan + purple outline.
     vf = drawtext_filter(["Glow"], 10, 8, style="neon")
-    assert "0x22D3EE" in vf
-    assert "0xA855F7" in vf
+    assert "0x22D3EE" in vf  # cyan ring
+    assert "0xA855F7" in vf  # purple ring
     assert vf.count("drawtext=") > 1
 
 
 def test_neon_caption_style_has_no_box():
-    # The neon style should rely on glow borders only -- no bounding box.
+    # The neon style should rely on coloured outlines only -- no bounding box.
     vf = drawtext_filter(["Glow"], 10, 8, style="neon")
     assert "box=1" not in vf
+
+
+def test_neon_caption_style_has_no_translucent_glow():
+    # No soft glow: borders are fully opaque (no "@" alpha) and the only fill
+    # colour is solid white.
+    vf = drawtext_filter(["Glow"], 10, 8, style="neon")
+    assert "@" not in vf
+    assert "fontcolor=white" in vf
 
 
 def test_captions_loop_to_fill_video_by_default():

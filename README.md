@@ -27,7 +27,7 @@ It runs one render at a time through a lightweight built-in queue, so heavy FFmp
 - 🎬 **Three-section layout** — a centre column plus left/right columns composited into a single 1440p video.
 - 🗂️ **Separate centre & side uploads** — the **centre** column plays your centre media in order; the **side pool** feeds the left and right columns, which each shuffle it **randomly and independently**. Both columns accept **images _and_ videos**.
 - 🔁 **Looping captions** — type captions or upload a UTF-8 `.txt` file; loop them **randomly** or **sequentially** across the whole video.
-- ✨ **Caption styling** — bright white text with a cyan/purple **neon glow** (default) or a classic high-contrast **boxed** style.
+- ✨ **Caption styling** — crisp white text wrapped in a dynamic **cyan + purple neon outline** (default) or a classic high-contrast **boxed** style. Optionally **animate** the captions so they gently pulse and bounce.
 - 🎵 **Optional music** — drop in a track and it's looped (and trimmed) to match the video length.
 - 🖥️ **Ultrawide support** — render at **2560×1440** or **3440×1440**.
 - ⚡ **Encoder choices** — software **x264** by default, plus optional **VAAPI**, **Intel QSV** and **NVIDIA NVENC**.
@@ -35,8 +35,8 @@ It runs one render at a time through a lightweight built-in queue, so heavy FFmp
 - 🛑 **Cancel running jobs** — stop a render that's taking too long; the active FFmpeg process is terminated and the job is marked cancelled.
 - ▶️ **In-browser preview** — play a finished render right in the dashboard (HTTP range streaming) before downloading.
 - 💾 **Reusable presets** — save the current render settings as a named preset and reload them with one click.
-- 🧹 **Self-cleaning** — isolated per-job temp folders that are purged after each render, plus a periodic 12-hour cleanup of stale temp files.
-- 🗑️ **Output management** — deleting a job also removes its rendered MP4, and a **Clear outputs** button (showing current size) purges orphaned videos, or all of them, straight from the dashboard so storage doesn't fill up.
+- 🧹 **Self-cleaning** — isolated per-job temp folders that are purged after each render, plus an automatic 12-hour cleanup of stale temp files. **Rendered videos are never auto-deleted** — you stay in control of your outputs.
+- 🗑️ **Output management** — choose **Remove (keep video)** to clear a finished job from the queue while leaving its MP4 safely in the outputs folder, or **Delete** to remove the job and its video together. The header **Clear outputs** button (showing the current size) lets you purge orphaned videos, or all of them, on demand.
 - 🔒 **Optional basic auth** — protect the dashboard with a username and password for shared networks.
 
 ## Quick start
@@ -227,6 +227,10 @@ pytest -q
 **Mobile**
 
 <img src="docs/screenshots/mobile.png" alt="Mobile dashboard" width="320" />
+
+**Neon caption style**
+
+<img src="docs/screenshots/caption-style.png" alt="Neon caption outline style" width="80%" />
 
 </div>
 

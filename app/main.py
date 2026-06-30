@@ -196,8 +196,10 @@ async def cancel_job(job_id: str) -> dict:
 
 
 @app.delete("/api/jobs/{job_id}", dependencies=[Depends(require_auth)])
-async def delete_job(job_id: str) -> dict:
-    if not await store.delete(job_id):
+async def delete_job(job_id: str, keep_output: bool = False) -> dict:
+    # keep_output=True removes the job (and its uploaded inputs) from the queue
+    # but leaves the rendered video in the outputs folder, just in case.
+    if not await store.delete(job_id, delete_output=not keep_output):
         raise HTTPException(400, "Cannot delete this job")
     return {"ok": True}
 

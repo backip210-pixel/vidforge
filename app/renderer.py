@@ -433,38 +433,41 @@ def drawtext_filter(captions: list[str], total_duration: int, caption_duration: 
                 )
             )
         else:
-            # FFmpeg drawtext does not provide a real blur effect, so the neon look is
-            # built from multiple inexpensive text layers: a large translucent glow,
-            # a brighter cyan glow pass, then crisp white text on top. No box and no
-            # drop shadows -- the glow comes purely from the translucent cyan/purple
-            # border passes.
-            fs1, y1 = _animation_exprs(t, 56, "h-124", animate)
-            fs2, y2 = _animation_exprs(t, 50, "h-120", animate)
-            fs3, y3 = _animation_exprs(t, 48, "h-120", animate)
+            # Neon look: crisp white text wrapped in a solid, two-tone neon
+            # outline -- NO glow/blur. We stack three layers of the same text at
+            # the same size and position: an outer magenta/purple border, then a
+            # thinner cyan border, then opaque white text on top. Because the
+            # borders are fully opaque and progressively thinner, the result is a
+            # bright multi-colour outline (purple edge -> cyan inner ring -> white
+            # core) rather than a soft glow.
+            fs, y = _animation_exprs(t, 48, "h-120", animate)
             pieces.extend([
+                # Outer purple/magenta outline.
                 drawtext_layer(
                     safe, t, end,
-                    fontsize=fs1,
-                    fontcolor="0x22D3EE@0.22",
-                    borderw=18,
-                    bordercolor="0xA855F7@0.28",
-                    y=y1,
-                ),
-                drawtext_layer(
-                    safe, t, end,
-                    fontsize=fs2,
-                    fontcolor="0x67E8F9@0.38",
-                    borderw=8,
-                    bordercolor="0x06B6D4@0.55",
-                    y=y2,
-                ),
-                drawtext_layer(
-                    safe, t, end,
-                    fontsize=fs3,
+                    fontsize=fs,
                     fontcolor="white",
-                    borderw=3,
-                    bordercolor="0x22D3EE@0.95",
-                    y=y3,
+                    borderw=9,
+                    bordercolor="0xA855F7",
+                    y=y,
+                ),
+                # Inner cyan outline.
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=fs,
+                    fontcolor="white",
+                    borderw=5,
+                    bordercolor="0x22D3EE",
+                    y=y,
+                ),
+                # Crisp white core with a thin sky-blue edge.
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=fs,
+                    fontcolor="white",
+                    borderw=2,
+                    bordercolor="0x0EA5E9",
+                    y=y,
                 ),
             ])
         t += caption_duration
