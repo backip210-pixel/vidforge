@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VidForge Render Queue</title>
+  <link rel="icon" href="/static/logo.svg" />
+  <style>
+    :root{--bg:#070b16;--panel:#0f172a;--panel2:#111827;--text:#e5e7eb;--muted:#94a3b8;--line:#22314d;--brand:#7c3aed;--cyan:#06b6d4;--good:#22c55e;--bad:#ef4444;--warn:#f59e0b}
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 20% 0%,#25125a 0,#070b16 34%),linear-gradient(135deg,#070b16,#071827);color:var(--text)}
+    header{position:sticky;top:0;z-index:3;backdrop-filter:blur(18px);background:rgba(7,11,22,.72);border-bottom:1px solid var(--line)}
+    .wrap{max-width:1180px;margin:auto;padding:20px}.nav{display:flex;gap:14px;align-items:center;justify-content:space-between}.brand{display:flex;gap:12px;align-items:center}.brand img{width:44px;height:44px;border-radius:12px}.brand h1{font-size:20px;margin:0}.brand span{color:var(--muted);font-size:13px}
+    .grid{display:grid;grid-template-columns:410px 1fr;gap:18px}.card{background:linear-gradient(180deg,rgba(15,23,42,.94),rgba(17,24,39,.90));border:1px solid var(--line);box-shadow:0 20px 70px rgba(0,0,0,.28);border-radius:24px;padding:20px}.card h2{margin:0 0 14px;font-size:18px}.hint{color:var(--muted);font-size:13px;line-height:1.5}
+    label{display:block;font-weight:700;font-size:13px;margin:14px 0 7px;color:#cbd5e1} input,select,textarea{width:100%;border:1px solid #334155;background:#0b1220;color:var(--text);border-radius:14px;padding:12px;outline:none} textarea{min-height:92px;resize:vertical}.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.file{border:1px dashed #475569;padding:14px;border-radius:16px;background:#0b1220}.file input{padding:0;border:0;background:transparent}.btn{appearance:none;border:0;border-radius:14px;padding:12px 16px;font-weight:800;color:white;cursor:pointer;background:linear-gradient(135deg,var(--brand),var(--cyan));box-shadow:0 10px 30px rgba(6,182,212,.16)}.btn.secondary{background:#1e293b}.btn.danger{background:#7f1d1d}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.btn:disabled{opacity:.55;cursor:not-allowed}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}.stat{background:#0b1220;border:1px solid var(--line);border-radius:18px;padding:14px}.stat b{display:block;font-size:24px}.stat span{color:var(--muted);font-size:12px}.job{border:1px solid var(--line);background:#0b1220;border-radius:18px;padding:14px;margin:12px 0}.jobtop{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}.job h3{margin:0;font-size:16px}.badge{font-size:12px;font-weight:800;border-radius:999px;padding:5px 10px;background:#263247;color:#cbd5e1}.badge.running{background:#164e63;color:#a5f3fc}.badge.completed{background:#14532d;color:#bbf7d0}.badge.failed{background:#7f1d1d;color:#fecaca}.badge.queued{background:#422006;color:#fde68a}.bar{height:10px;background:#1e293b;border-radius:999px;overflow:hidden;margin:12px 0}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--cyan));border-radius:inherit}.meta{color:var(--muted);font-size:12px}.log{white-space:pre-wrap;background:#030712;border:1px solid #1f2937;padding:12px;border-radius:14px;max-height:220px;overflow:auto;color:#cbd5e1;font-size:12px;display:none}.empty{text-align:center;color:var(--muted);padding:36px;border:1px dashed #334155;border-radius:18px}.toast{position:fixed;right:18px;bottom:18px;background:#111827;border:1px solid #334155;border-radius:14px;padding:12px 14px;display:none}
+    @media (max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}.wrap{padding:14px}.card{border-radius:18px}.row{grid-template-columns:1fr}.nav{align-items:flex-start}.brand span{display:none}}
+  </style>
+</head>
+<body>
+<header><div class="wrap nav"><div class="brand"><img src="/static/logo.svg" alt="VidForge logo"><div><h1>VidForge</h1><span>Containerised FFmpeg render queue for ZimaOS and home servers</span></div></div><button class="btn secondary" onclick="cleanup()">Purge old temp files</button></div></header>
+<main class="wrap grid">
+  <section class="card">
+    <h2>Create render job</h2>
+    <p class="hint">Upload a separate batch of images, videos and optional music for each compilation. Jobs are processed one at a time so renders never collide.</p>
+    <form id="jobForm">
+      <label>Job name</label><input name="name" placeholder="Weekend compilation" />
+      <div class="row"><div><label>Resolution</label><select name="resolution"><option value="1440p">2560 × 1440</option><option value="ultrawide">3440 × 1440 ultrawide</option></select></div><div><label>Renderer</label><select name="encoder"><option value="software">Software x264 - safest</option><option value="vaapi">VAAPI - AMD/Intel Linux</option><option value="qsv">Intel Quick Sync</option><option value="nvenc">NVIDIA NVENC</option></select></div></div>
+      <div class="row"><div><label>Seconds per image</label><input type="number" name="duration_per_image" min="1" max="120" value="8"></div><div><label>Caption duration</label><input type="number" name="caption_duration" min="1" max="120" value="8"></div></div>
+      <label>Captions, one per line</label><textarea name="captions">Test
+Test2</textarea>
+      <label>Images</label><div class="file"><input name="images" type="file" accept=".jpg,.jpeg,.png" multiple></div>
+      <label>Videos</label><div class="file"><input name="videos" type="file" accept=".mp4,.webm,.mov,.mkv,.m4v" multiple></div>
+      <label>Music track</label><div class="file"><input name="music" type="file" accept=".mp3,.wav,.m4a,.aac,.flac,.ogg"></div>
+      <div class="actions"><button class="btn" id="submitBtn">Add to queue</button></div>
+    </form>
+  </section>
+  <section>
+    <div class="stats"><div class="stat"><b id="queued">0</b><span>Queued</span></div><div class="stat"><b id="running">0</b><span>Running</span></div><div class="stat"><b id="done">0</b><span>Completed</span></div><div class="stat"><b id="failed">0</b><span>Failed</span></div></div>
+    <div class="card"><h2>Queue dashboard</h2><div id="jobs"><div class="empty">No jobs yet. Upload media to start.</div></div></div>
+  </section>
+</main><div class="toast" id="toast"></div>
+<script>
+const $=s=>document.querySelector(s); let jobs=[];
+function toast(t){const el=$('#toast');el.textContent=t;el.style.display='block';setTimeout(()=>el.style.display='none',3500)}
+async function refresh(){const r=await fetch('/api/jobs'); const data=await r.json(); jobs=data.jobs||[]; render();}
+function counts(s){return jobs.filter(j=>j.status===s).length}
+function render(){ $('#queued').textContent=counts('queued'); $('#running').textContent=counts('running'); $('#done').textContent=counts('completed'); $('#failed').textContent=counts('failed'); const root=$('#jobs'); if(!jobs.length){root.innerHTML='<div class="empty">No jobs yet. Upload media to start.</div>';return} root.innerHTML=jobs.map(j=>`<article class="job"><div class="jobtop"><div><h3>${esc(j.name)}</h3><div class="meta">${j.id} · ${new Date(j.created_at).toLocaleString()} · ${(j.input_counts?.images||0)} images, ${(j.input_counts?.videos||0)} videos, ${(j.input_counts?.music||0)} music</div></div><span class="badge ${j.status}">${j.status}</span></div><div class="bar"><i style="width:${j.progress||0}%"></i></div><div class="meta">${j.progress||0}% · ${esc(j.stage||'')}</div>${j.error?`<p class="meta" style="color:#fecaca">${esc(j.error)}</p>`:''}<div class="actions">${j.status==='completed'?`<a class="btn" href="/api/jobs/${j.id}/download">Download</a>`:''}<button class="btn secondary" onclick="showLog('${j.id}',this)">Log</button>${j.status!=='running'?`<button class="btn secondary" onclick="requeue('${j.id}')">Requeue</button><button class="btn danger" onclick="delJob('${j.id}')">Delete</button>`:''}</div><pre class="log" id="log-${j.id}"></pre></article>`).join('')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('#jobForm').addEventListener('submit',async e=>{e.preventDefault(); const btn=$('#submitBtn'); btn.disabled=true; btn.textContent='Uploading…'; try{const fd=new FormData(e.target); const r=await fetch('/api/jobs',{method:'POST',body:fd}); if(!r.ok) throw new Error(await r.text()); e.target.reset(); e.target.captions.value='Test\nTest2'; toast('Job added to queue'); await refresh();}catch(err){toast('Upload failed: '+err.message)} finally{btn.disabled=false;btn.textContent='Add to queue'}})
+async function showLog(id){const el=$('#log-'+id); if(el.style.display==='block'){el.style.display='none';return} el.textContent=await (await fetch(`/api/jobs/${id}/log`)).text(); el.style.display='block'}
+async function requeue(id){await fetch(`/api/jobs/${id}/requeue`,{method:'POST'}); toast('Job requeued'); refresh()}
+async function delJob(id){if(confirm('Delete this job and its uploaded files?')){await fetch(`/api/jobs/${id}`,{method:'DELETE'}); refresh()}}
+async function cleanup(){const d=await (await fetch('/api/cleanup',{method:'POST'})).json(); toast(`Removed ${d.removed} old temp item(s)`)}
+refresh(); setInterval(refresh,3000);
+</script>
+</body></html>

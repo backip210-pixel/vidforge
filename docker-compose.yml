@@ -1,0 +1,20 @@
+services:
+  vidforge:
+    build: .
+    image: vidforge:latest
+    container_name: vidforge
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      # Uncomment on Linux hosts when using AMD/Intel VAAPI hardware encoding.
+      # - /dev/dri:/dev/dri
+    environment:
+      APP_DATA_DIR: /data
+      APP_PORT: 8080
+      # Optional basic auth. Leave unset for LAN-only dashboard access.
+      # APP_USERNAME: admin
+      # APP_PASSWORD: change-me
+      # Comma separated CORS origins if needed.
+      # APP_CORS_ORIGINS: http://localhost:8080
