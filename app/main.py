@@ -81,8 +81,11 @@ async def create_job(
     encoder: str = Form("software"),
     duration_per_image: int = Form(8),
     caption_duration: int = Form(8),
+    caption_order: str = Form("random"),
+    caption_style: str = Form("neon"),
     captions: str = Form("Test\nTest2"),
     keep_video_audio: bool = Form(False),
+    captions_file: UploadFile | None = File(None),
     music: UploadFile | None = File(None),
     images: list[UploadFile] = File(default=[]),
     videos: list[UploadFile] = File(default=[]),
@@ -91,17 +94,34 @@ async def create_job(
         raise HTTPException(400, "Invalid resolution")
     if encoder not in ("software", "vaapi", "nvenc", "qsv"):
         raise HTTPException(400, "Invalid encoder")
+    if caption_order not in ("random", "sequential"):
+        raise HTTPException(400, "Invalid caption order")
+    if caption_style not in ("neon", "classic"):
+        raise HTTPException(400, "Invalid caption style")
+
+    parsed_captions = parse_captions(captions)
+    uploaded_caption_text = ""
+    if captions_file and captions_file.filename:
+        raw = await captions_file.read()
+        try:
+            uploaded_caption_text = raw.decode("utf-8")
+            parsed_captions.extend(parse_captions(uploaded_caption_text))
+        except UnicodeDecodeError:
+            raise HTTPException(400, "Caption file must be UTF-8 text")
 
     opts = RenderOptions(
         resolution=resolution,  # type: ignore[arg-type]
         encoder=encoder,  # type: ignore[arg-type]
         duration_per_image=max(1, min(duration_per_image, 120)),
         caption_duration=max(1, min(caption_duration, 120)),
-        captions=parse_captions(captions) or [""],
+        caption_order=caption_order,  # type: ignore[arg-type]
+        caption_style=caption_style,  # type: ignore[arg-type]
+        captions=parsed_captions or [""],
         keep_video_audio=keep_video_audio,
     )
     job = await store.add(name, opts)
     job_dir = settings.jobs_dir / job.id / "input"
+    (job_dir / "captions.txt").write_text("\n".join(opts.captions) + "\n", encoding="utf-8")
 
     async def save_upload(upload: UploadFile, folder: Path, allowed: set[str]) -> bool:
         if not upload or not upload.filename:

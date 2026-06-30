@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VidForge Render Queue</title>
   <link rel="icon" href="/static/logo.svg" />
+  <link rel="manifest" href="/static/manifest.webmanifest" />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="apple-mobile-web-app-title" content="VidForge" />
   <style>
     :root{--bg:#070b16;--panel:#0f172a;--panel2:#111827;--text:#e5e7eb;--muted:#94a3b8;--line:#22314d;--brand:#7c3aed;--cyan:#06b6d4;--good:#22c55e;--bad:#ef4444;--warn:#f59e0b}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:radial-gradient(circle at 20% 0%,#25125a 0,#070b16 34%),linear-gradient(135deg,#070b16,#071827);color:var(--text)}
@@ -21,13 +24,15 @@
 <main class="wrap grid">
   <section class="card">
     <h2>Create render job</h2>
-    <p class="hint">Upload a separate batch of images, videos and optional music for each compilation. Jobs are processed one at a time so renders never collide.</p>
+    <p class="hint">Upload a separate batch of images, videos, optional music and captions for each compilation. Captions can loop randomly or sequentially across the finished video, with optional neon styling.</p>
     <form id="jobForm">
       <label>Job name</label><input name="name" placeholder="Weekend compilation" />
       <div class="row"><div><label>Resolution</label><select name="resolution"><option value="1440p">2560 × 1440</option><option value="ultrawide">3440 × 1440 ultrawide</option></select></div><div><label>Renderer</label><select name="encoder"><option value="software">Software x264 - safest</option><option value="vaapi">VAAPI - AMD/Intel Linux</option><option value="qsv">Intel Quick Sync</option><option value="nvenc">NVIDIA NVENC</option></select></div></div>
       <div class="row"><div><label>Seconds per image</label><input type="number" name="duration_per_image" min="1" max="120" value="8"></div><div><label>Caption duration</label><input type="number" name="caption_duration" min="1" max="120" value="8"></div></div>
-      <label>Captions, one per line</label><textarea name="captions">Test
+      <div class="row"><div><label>Caption order</label><select name="caption_order"><option value="random" selected>Random loop</option><option value="sequential">Sequential loop</option></select></div><div><label>Caption style</label><select name="caption_style"><option value="neon" selected>White + neon glow</option><option value="classic">Classic boxed text</option></select></div></div>
+      <label>Captions, one per line</label><textarea name="captions" placeholder="One caption per line. These will loop across the video.">Test
 Test2</textarea>
+      <label>Optional captions .txt file</label><div class="file"><input name="captions_file" type="file" accept=".txt,text/plain"></div>
       <label>Images</label><div class="file"><input name="images" type="file" accept=".jpg,.jpeg,.png" multiple></div>
       <label>Videos</label><div class="file"><input name="videos" type="file" accept=".mp4,.webm,.mov,.mkv,.m4v" multiple></div>
       <label>Music track</label><div class="file"><input name="music" type="file" accept=".mp3,.wav,.m4a,.aac,.flac,.ogg"></div>

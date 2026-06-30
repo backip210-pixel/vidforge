@@ -1,0 +1,23 @@
+services:
+  vidforge:
+    image: ghcr.io/backip210-pixel/vidforge:latest
+    container_name: vidforge
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      # Optional AMD/Intel VAAPI hardware encode support.
+      # - /dev/dri:/dev/dri
+    environment:
+      APP_DATA_DIR: /data
+      APP_PORT: 8080
+      TEMP_MAX_AGE_HOURS: 12
+      # APP_USERNAME: admin
+      # APP_PASSWORD: change-me
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

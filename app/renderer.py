@@ -113,22 +113,112 @@ def create_image_section(images: list[Path], middle_duration: int, out: Path, wi
     run(cmd, log, "Creating image section")
 
 
-def drawtext_filter(captions: list[str], total_duration: int, caption_duration: int) -> str:
+def caption_sequence(captions: list[str], needed: int, order: str) -> list[str]:
     captions = [c.strip() for c in captions if c.strip()] or [""]
+    if order != "random" or len(captions) <= 1:
+        return [captions[i % len(captions)] for i in range(needed)]
+
+    result: list[str] = []
+    previous: str | None = None
+    while len(result) < needed:
+        bag = captions[:]
+        random.shuffle(bag)
+        for caption in bag:
+            # Avoid the same caption appearing across a shuffle boundary where possible.
+            if previous is not None and caption == previous and len(bag) > 1:
+                continue
+            result.append(caption)
+            previous = caption
+            if len(result) >= needed:
+                break
+    return result
+
+
+def drawtext_layer(text: str, start: int, end: float, *, fontsize: int, fontcolor: str,
+                   x: str = "(w-text_w)/2", y: str = "h-120", borderw: int = 0,
+                   bordercolor: str | None = None, box: bool = False,
+                   boxcolor: str = "0x000000@0.70", boxborderw: int = 10,
+                   shadowcolor: str | None = None, shadowx: int = 0, shadowy: int = 0) -> str:
+    parts = [
+        f"drawtext=fontfile={FONT_FILE}",
+        f"text='{text}'",
+        f"enable='between(t,{start},{end})'",
+        f"fontcolor={fontcolor}",
+        f"fontsize={fontsize}",
+        f"x={x}",
+        f"y={y}",
+    ]
+    if borderw:
+        parts.append(f"borderw={borderw}")
+    if bordercolor:
+        parts.append(f"bordercolor={bordercolor}")
+    if box:
+        parts.extend(["box=1", f"boxcolor={boxcolor}", f"boxborderw={boxborderw}"])
+    if shadowcolor:
+        parts.extend([f"shadowcolor={shadowcolor}", f"shadowx={shadowx}", f"shadowy={shadowy}"])
+    return ":".join(parts)
+
+
+def drawtext_filter(captions: list[str], total_duration: int, caption_duration: int,
+                    order: str = "random", style: str = "neon") -> str:
     needed = (total_duration // max(caption_duration, 1)) + 2
     pieces: list[str] = []
     t = 0
-    for i in range(needed):
-        caption = captions[i % len(captions)]
+    for caption in caption_sequence(captions, needed, order):
         # Escape for FFmpeg drawtext.
         safe = caption.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("%", "\\%")
         end = t + caption_duration - 0.1
-        pieces.append(
-            "drawtext="
-            f"fontfile={FONT_FILE}:text='{safe}':enable='between(t,{t},{end})':"
-            "fontcolor=white:fontsize=48:box=1:boxcolor=black@0.70:boxborderw=10:"
-            "x=(w-text_w)/2:y=h-120"
-        )
+        if style == "classic":
+            pieces.append(
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=48,
+                    fontcolor="white",
+                    box=True,
+                    boxcolor="0x000000@0.70",
+                    boxborderw=10,
+                    y="h-120",
+                )
+            )
+        else:
+            # FFmpeg drawtext does not provide a real blur effect, so the neon look is
+            # built from multiple inexpensive text layers: a large translucent glow,
+            # offset cyan/purple glow passes, then crisp white text on top.
+            pieces.extend([
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=56,
+                    fontcolor="0x22D3EE@0.22",
+                    borderw=18,
+                    bordercolor="0xA855F7@0.28",
+                    y="h-124",
+                ),
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=50,
+                    fontcolor="0x67E8F9@0.38",
+                    borderw=8,
+                    bordercolor="0x06B6D4@0.55",
+                    shadowcolor="0x06B6D4@0.85",
+                    shadowx=2,
+                    shadowy=2,
+                    y="h-120",
+                ),
+                drawtext_layer(
+                    safe, t, end,
+                    fontsize=48,
+                    fontcolor="white",
+                    borderw=3,
+                    bordercolor="0x22D3EE@0.95",
+                    box=True,
+                    boxcolor="0x020617@0.42",
+                    boxborderw=16,
+                    shadowcolor="0xA855F7@0.95",
+                    shadowx=0,
+                    shadowy=0,
+                    y="h-120",
+                ),
+            ])
         t += caption_duration
     return ",".join(pieces)
 
@@ -191,7 +281,7 @@ def render_job(job: Job, data_dir: Path, progress: Progress) -> Path:
     progress(78, "Composited layout")
 
     total_duration = max(int(probe_duration(final_layout) + 0.5), middle_duration)
-    vf = "format=yuv420p," + drawtext_filter(opts.captions, total_duration, opts.caption_duration)
+    vf = "format=yuv420p," + drawtext_filter(opts.captions, total_duration, opts.caption_duration, opts.caption_order, opts.caption_style)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     out_name = f"{safe_name(job.name).replace(' ', '_')}_{timestamp}.mp4"
     output = outputs / out_name

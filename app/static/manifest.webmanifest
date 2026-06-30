@@ -1,0 +1,12 @@
+{
+  "name": "VidForge",
+  "short_name": "VidForge",
+  "description": "Containerised FFmpeg render queue for home servers and ZimaOS.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b16",
+  "theme_color": "#7c3aed",
+  "icons": [
+    { "src": "/static/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

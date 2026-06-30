@@ -10,6 +10,8 @@ from uuid import uuid4
 JobStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
 Resolution = Literal["1440p", "ultrawide"]
 Encoder = Literal["software", "vaapi", "nvenc", "qsv"]
+CaptionOrder = Literal["random", "sequential"]
+CaptionStyle = Literal["neon", "classic"]
 
 
 def utc_now() -> str:
@@ -22,6 +24,8 @@ class RenderOptions:
     encoder: Encoder = "software"
     duration_per_image: int = 8
     caption_duration: int = 8
+    caption_order: CaptionOrder = "random"
+    caption_style: CaptionStyle = "neon"
     captions: list[str] = field(default_factory=lambda: ["Test", "Test2"])
     keep_video_audio: bool = False
     video_bitrate: str = "15000k"
