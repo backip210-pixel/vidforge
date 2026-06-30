@@ -89,6 +89,8 @@ async def create_job(
     caption_duration: int = Form(8),
     caption_order: str = Form("random"),
     caption_style: str = Form("neon"),
+    caption_loop: bool = Form(True),
+    caption_animate: bool = Form(False),
     captions: str = Form("Test\nTest2"),
     keep_video_audio: bool = Form(False),
     captions_file: UploadFile | None = File(None),
@@ -125,6 +127,8 @@ async def create_job(
         caption_duration=max(1, min(caption_duration, 120)),
         caption_order=caption_order,  # type: ignore[arg-type]
         caption_style=caption_style,  # type: ignore[arg-type]
+        caption_loop=caption_loop,
+        caption_animate=caption_animate,
         captions=parsed_captions or [""],
         keep_video_audio=keep_video_audio,
     )

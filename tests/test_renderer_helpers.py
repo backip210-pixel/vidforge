@@ -30,6 +30,35 @@ def test_neon_caption_style_adds_glow_layers():
     assert vf.count("drawtext=") > 1
 
 
+def test_neon_caption_style_has_no_box():
+    # The neon style should rely on glow borders only -- no bounding box.
+    vf = drawtext_filter(["Glow"], 10, 8, style="neon")
+    assert "box=1" not in vf
+
+
+def test_captions_loop_to_fill_video_by_default():
+    # Classic style is one layer per caption, so we can count appearances.
+    # Two captions over a long video should repeat to cover the whole duration.
+    vf = drawtext_filter(["A", "B"], 40, 8, order="sequential", style="classic")
+    assert vf.count("text='A'") + vf.count("text='B'") > 2
+
+
+def test_captions_can_be_shown_once_without_looping():
+    # With loop disabled, each caption appears exactly once (classic = 1 layer).
+    vf = drawtext_filter(["A", "B"], 40, 8, order="sequential", style="classic", loop=False)
+    assert vf.count("text='A'") == 1
+    assert vf.count("text='B'") == 1
+
+
+def test_animation_adds_time_based_size_and_position():
+    static = drawtext_filter(["Hi"], 10, 8, style="neon", animate=False)
+    animated = drawtext_filter(["Hi"], 10, 8, style="neon", animate=True)
+    # Static font sizes are plain integers; animated ones use sin() expressions.
+    assert "sin(" not in static
+    assert "sin(" in animated
+    assert "abs(sin(" in animated  # the vertical bounce
+
+
 def test_classic_caption_style_uses_single_boxed_layer():
     vf = drawtext_filter(["Classic"], 5, 8, style="classic")
     assert "box=1" in vf

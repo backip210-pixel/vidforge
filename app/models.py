@@ -26,6 +26,8 @@ class RenderOptions:
     caption_duration: int = 8
     caption_order: CaptionOrder = "random"
     caption_style: CaptionStyle = "neon"
+    caption_loop: bool = True
+    caption_animate: bool = False
     captions: list[str] = field(default_factory=lambda: ["Test", "Test2"])
     keep_video_audio: bool = False
     video_bitrate: str = "15000k"

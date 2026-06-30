@@ -352,7 +352,7 @@ def caption_sequence(captions: list[str], needed: int, order: str) -> list[str]:
     return result
 
 
-def drawtext_layer(text: str, start: int, end: float, *, fontsize: int, fontcolor: str,
+def drawtext_layer(text: str, start: int, end: float, *, fontsize: str, fontcolor: str,
                    x: str = "(w-text_w)/2", y: str = "h-120", borderw: int = 0,
                    bordercolor: str | None = None, box: bool = False,
                    boxcolor: str = "0x000000@0.70", boxborderw: int = 10,
@@ -377,60 +377,94 @@ def drawtext_layer(text: str, start: int, end: float, *, fontsize: int, fontcolo
     return ":".join(parts)
 
 
+def _animation_exprs(start: int, base_fontsize: int, base_y: str, animate: bool) -> tuple[str, str]:
+    """Return ``(fontsize_expr, y_expr)`` for a caption layer.
+
+    When ``animate`` is True the text gently throbs (a sine pulse on the font
+    size) and bounces (a sine offset on the vertical position), evaluated from
+    the local time since this caption appeared so every caption animates the
+    same way. The size pulse is rounded to whole pixels with FFmpeg's ``st``/
+    ``floor`` so glyph rasterisation stays stable instead of jittering.
+    """
+    if not animate:
+        return str(base_fontsize), base_y
+    # Local time within this caption's window.
+    lt = f"(t-{start})"
+    # Throb: pulse the size by a few px at ~1.4 Hz.
+    pulse = max(2, round(base_fontsize * 0.06))
+    fontsize_expr = f"'floor({base_fontsize}+{pulse}*sin(2*PI*1.4*{lt}))'"
+    # Bounce: lift the text by up to ~10 px at ~1.4 Hz (abs(sin) gives a hop).
+    bounce = 10
+    y_expr = f"'{base_y}-{bounce}*abs(sin(2*PI*1.4*{lt}))'"
+    return fontsize_expr, y_expr
+
+
 def drawtext_filter(captions: list[str], total_duration: int, caption_duration: int,
-                    order: str = "random", style: str = "neon") -> str:
-    needed = (total_duration // max(caption_duration, 1)) + 2
+                    order: str = "random", style: str = "neon",
+                    loop: bool = True, animate: bool = False) -> str:
+    base = (total_duration // max(caption_duration, 1)) + 2
+    cleaned = [c.strip() for c in captions if c.strip()]
+    if loop or not cleaned:
+        # Loop/repeat the caption pool to cover the whole video.
+        sequence = caption_sequence(captions, base, order)
+    else:
+        # Show each caption once (optionally shuffled), then stop.
+        sequence = cleaned[:]
+        if order == "random":
+            sequence = sequence[:]
+            random.shuffle(sequence)
     pieces: list[str] = []
     t = 0
-    for caption in caption_sequence(captions, needed, order):
+    for caption in sequence:
         # Escape for FFmpeg drawtext.
         safe = caption.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'").replace("%", "\\%")
         end = t + caption_duration - 0.1
         if style == "classic":
+            fs, yexpr = _animation_exprs(t, 48, "h-120", animate)
             pieces.append(
                 drawtext_layer(
                     safe, t, end,
-                    fontsize=48,
+                    fontsize=fs,
                     fontcolor="white",
                     box=True,
                     boxcolor="0x000000@0.70",
                     boxborderw=10,
-                    y="h-120",
+                    y=yexpr,
                 )
             )
         else:
             # FFmpeg drawtext does not provide a real blur effect, so the neon look is
             # built from multiple inexpensive text layers: a large translucent glow,
-            # a brighter cyan glow pass, then crisp white text on top. No drop
-            # shadows are used -- the glow comes purely from the translucent
-            # cyan/purple border passes.
+            # a brighter cyan glow pass, then crisp white text on top. No box and no
+            # drop shadows -- the glow comes purely from the translucent cyan/purple
+            # border passes.
+            fs1, y1 = _animation_exprs(t, 56, "h-124", animate)
+            fs2, y2 = _animation_exprs(t, 50, "h-120", animate)
+            fs3, y3 = _animation_exprs(t, 48, "h-120", animate)
             pieces.extend([
                 drawtext_layer(
                     safe, t, end,
-                    fontsize=56,
+                    fontsize=fs1,
                     fontcolor="0x22D3EE@0.22",
                     borderw=18,
                     bordercolor="0xA855F7@0.28",
-                    y="h-124",
+                    y=y1,
                 ),
                 drawtext_layer(
                     safe, t, end,
-                    fontsize=50,
+                    fontsize=fs2,
                     fontcolor="0x67E8F9@0.38",
                     borderw=8,
                     bordercolor="0x06B6D4@0.55",
-                    y="h-120",
+                    y=y2,
                 ),
                 drawtext_layer(
                     safe, t, end,
-                    fontsize=48,
+                    fontsize=fs3,
                     fontcolor="white",
                     borderw=3,
                     bordercolor="0x22D3EE@0.95",
-                    box=True,
-                    boxcolor="0x020617@0.42",
-                    boxborderw=16,
-                    y="h-120",
+                    y=y3,
                 ),
             ])
         t += caption_duration
@@ -493,7 +527,10 @@ def render_job(job: Job, data_dir: Path, progress: Progress, cancel: CancelToken
     progress(78, "Composited layout")
 
     total_duration = max(int(probe_duration(final_layout) + 0.5), middle_duration)
-    vf = "format=yuv420p," + drawtext_filter(opts.captions, total_duration, opts.caption_duration, opts.caption_order, opts.caption_style)
+    vf = "format=yuv420p," + drawtext_filter(
+        opts.captions, total_duration, opts.caption_duration, opts.caption_order,
+        opts.caption_style, loop=opts.caption_loop, animate=opts.caption_animate,
+    )
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     out_name = f"{safe_name(job.name).replace(' ', '_')}_{timestamp}.mp4"
     output = outputs / out_name

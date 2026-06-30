@@ -14,6 +14,8 @@ PRESET_FIELDS = {
     "caption_duration",
     "caption_order",
     "caption_style",
+    "caption_loop",
+    "caption_animate",
     "captions",
     "keep_video_audio",
 }
